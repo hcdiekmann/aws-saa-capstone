@@ -1,0 +1,27 @@
+name: Export Drawio
+
+on:
+  push:
+    paths:
+      - 'path/to/yourfile.drawio'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Install drawio-export
+        run: npm install -g drawio-export
+
+      - name: Export drawio to png
+        run: drawio-export docs/design/topology.drawio docs/design/topology.png
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add path/to/output.png
+          git commit -m "Update drawio diagram" && git push
