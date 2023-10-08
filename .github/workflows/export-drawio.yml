@@ -8,6 +8,12 @@ jobs:
   drawio-export:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Export drawio files to png files
         uses: rlespinasse/drawio-export-action@v2
         with:
