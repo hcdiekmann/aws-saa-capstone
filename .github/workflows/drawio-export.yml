@@ -18,11 +18,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
 
-      - name: Install drawio-export
-        run: npm install -g drawio-export
-
-      - name: Export drawio to png
-        run: drawio-export docs/design/topology.drawio docs/design/topology.png
+      - name: Export drawio to png using Docker
+        run: |
+          docker run -v ${{ github.workspace }}:/workdir -w /workdir jgraph/drawio -x -f png -o docs/design/topology.png docs/design/topology.drawio
 
       - name: Commit and push changes
         run: |
