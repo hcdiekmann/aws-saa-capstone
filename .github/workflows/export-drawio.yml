@@ -1,0 +1,19 @@
+name: Export Drawio
+
+on:
+  push:
+    paths:
+      - 'docs/design/topology.drawio'
+jobs:
+  drawio-export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Export drawio files to png files
+        uses: rlespinasse/drawio-export-action@v2
+        with:
+          path: docs/design/topology.drawio
+          format: png
+          transparent: true
+          output: png-export
+      
+            
