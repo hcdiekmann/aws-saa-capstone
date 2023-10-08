@@ -26,10 +26,8 @@ jobs:
       - name: Export drawio files to png files
         uses: rlespinasse/drawio-export-action@v2
         with:
-          path: docs/design/topology.drawio
           format: png
           transparent: true
-          output: png-export
 
       - name: Get author and committer info from HEAD commit
         uses: rlespinasse/git-commit-data-action@v1
