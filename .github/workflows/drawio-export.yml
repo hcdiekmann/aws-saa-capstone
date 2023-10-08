@@ -3,7 +3,7 @@ name: Export Drawio
 on:
   push:
     paths:
-      - 'path/to/yourfile.drawio'
+      - 'docs/design/topology.drawio'
 
 jobs:
   build:
