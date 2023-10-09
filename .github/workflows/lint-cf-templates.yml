@@ -5,7 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'cloudformation/templates/'
+      - 'cloudformation/templates/*.yaml'
+      - .github/workflows/lint-cf-templates.yml
 
 jobs:
   cloudformation-linter:
