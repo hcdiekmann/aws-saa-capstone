@@ -18,4 +18,4 @@ Create a highly available, fault tolerant, scalable, and secure web application 
 
 ## Design
 
-![Topology](docs/design/export/topology-Page-1.png)
+![Topology](design/export/topology-Page-1.png)

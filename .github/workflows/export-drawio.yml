@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths:
-      - '**.drawio'
-      - 'docs/design/topology.drawio'
+      - 'design/topology.drawio'
       - .github/workflows/export-drawio.yml
 
 concurrency:
