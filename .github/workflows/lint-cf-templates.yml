@@ -21,6 +21,7 @@ jobs:
 
       - name: Install pydot and pygraphviz
         run: |
+          sudo apt-get install graphviz graphviz-dev
           pip install pygraphviz
           pip install pydot
 
