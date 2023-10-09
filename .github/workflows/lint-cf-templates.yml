@@ -30,10 +30,10 @@ jobs:
           cfn-lint --version
           cfn-lint -t cloudformation/templates/*.yaml -g
 
-      - name: Commit and push DOT files
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add cloudformation/templates/*.dot
-          git commit -m "Add generated DOT graph" || echo "No changes to commit"
-          git push
+      # - name: Commit and push DOT files
+      #   run: |
+      #     git config --local user.email "action@github.com"
+      #     git config --local user.name "GitHub Action"
+      #     git add cloudformation/templates/*.dot
+      #     git commit -m "Add generated DOT graph" || echo "No changes to commit"
+      #     git push
