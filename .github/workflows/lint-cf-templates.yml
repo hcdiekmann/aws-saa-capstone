@@ -19,8 +19,9 @@ jobs:
       - name: Setup Cloud Formation Linter with Latest Version
         uses: scottbrenner/cfn-lint-action@v2
 
-      - name: Install pydot
+      - name: Install pydot and graphviz
         run: |
+          pip install graphviz
           pip install pydot
 
       - name: Run Linter and generate DOT files
