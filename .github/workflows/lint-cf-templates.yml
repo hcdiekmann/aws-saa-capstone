@@ -28,7 +28,7 @@ jobs:
       - name: Run Linter and generate DOT files
         run: |
           cfn-lint --version
-          cfn-lint -g -t cloudformation/templates/*.yaml
+          cfn-lint -t cloudformation/templates/*.yaml -g
 
       - name: Commit and push DOT files
         run: |
