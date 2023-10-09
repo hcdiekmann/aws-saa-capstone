@@ -37,7 +37,7 @@ Resources:
           ToPort: '80'
           CidrIp: 0.0.0.0/0
 
-  InstanceRole:
+  LabRole:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
@@ -63,7 +63,7 @@ Resources:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Roles:
-        - !Ref InstanceRole
+        - !Ref LabRole
 
   WebServer:
     Type: 'AWS::EC2::Instance'
