@@ -100,11 +100,13 @@ Resources:
           chown -R ec2-user:ec2-user /var/www/html
           cd /home/ec2-user
           sudo systemctl enable mariadb.service
+          sudo systemctl start mariadb.service
           database=$(aws ssm get-parameter --name "/example/database" --region "us-east-1" --query "Parameter.Value" --output text)
           password=$(aws ssm get-parameter --name "/example/password" --region "us-east-1" --query "Parameter.Value" --output text)
           username=$(aws ssm get-parameter --name "/example/username" --region "us-east-1" --query "Parameter.Value" --output text)
-          sudo systemctl start mariadb.service
-          mysql -u mysql << EOF
+          echo "Database: $database"
+          echo "Username: $username"
+          mysql -u root << EOF
           CREATE DATABASE $database;
           CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';
           GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';

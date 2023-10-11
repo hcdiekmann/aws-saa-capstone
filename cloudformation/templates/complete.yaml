@@ -154,20 +154,3 @@ Resources:
   MySqlDatabase:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-      AllocatedStorage: '20'
-      DBInstanceClass: db.t2.micro
-      Engine: MySQL
-      EngineVersion: '8.0'
-      MasterUsername: 'admin'
-      MasterUserPassword: 'admin123'
-      DBInstanceIdentifier: 'mydb'
-      VPCSecurityGroups:
-        - !Ref RdsSecurityGroup
-      Tags:
-        - Key: 'Name'
-          Value: 'MySqlDatabase'
-
-Outputs:
-  BastionHostPublicIP:
-    Description: 'IP address of the Bastion Host'
-    Value: !GetAtt BastionHost.PublicIp
