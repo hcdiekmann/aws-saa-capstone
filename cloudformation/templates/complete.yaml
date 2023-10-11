@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CF template for the as-found architecture of the Capstone project
+Description: CF template for updated architecture of the Capstone project with
 
 Parameters:
   KeyName:
@@ -56,7 +56,37 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  BastionHostSecurityGroup:
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [1, !GetAZs ''] # Second AZ in the list
+      Tags:
+        - Key: 'Name'
+          Value: 'PublicSubnet2'
+
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.2.0/23'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: 'Name'
+          Value: 'PrivateSubnet1'
+
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.4.0/23'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: 'Name'
+          Value: 'PrivateSubnet2'
+
+  WebServerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'Enable SSH and HTTP access'
@@ -74,14 +104,14 @@ Resources:
         - Key: 'Name'
           Value: 'BastionHostSecurityGroup'
 
-  BastionHost:
+  WebServer:
     Type: 'AWS::EC2::Instance'
     Properties:
-      InstanceType: t2.micro
+      InstanceType: t2.small
       ImageId: ami-0e1c5d8c23330dee3 # Ensure this is the correct AMI ID for your region
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
-        - !Ref BastionHostSecurityGroup
+        - !Ref WebServerSecurityGroup
       KeyName: !Ref KeyName
       UserData:
         Fn::Base64: |
@@ -98,24 +128,44 @@ Resources:
           wget https://aws-tc-largeobjects.s3.us-west-2.amazonaws.com/CUR-TF-200-ACACAD-2/21-course-project/s3/Example.zip
           unzip Example.zip -d /var/www/html/
           chown -R ec2-user:ec2-user /var/www/html
-          cd /home/ec2-user
-          sudo systemctl enable mariadb.service
-          database=$(aws ssm get-parameter --name "/example/database" --region "us-east-1" --query "Parameter.Value" --output text)
-          password=$(aws ssm get-parameter --name "/example/password" --region "us-east-1" --query "Parameter.Value" --output text)
-          username=$(aws ssm get-parameter --name "/example/username" --region "us-east-1" --query "Parameter.Value" --output text)
-          sudo systemctl start mariadb.service
-          mysql -u mysql << EOF
-          CREATE DATABASE $database;
-          CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';
-          GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';
-          FLUSH PRIVILEGES;
-          EOF
-          mysql -u $username -p$password $database < Countrydatadump.sql
-
       IamInstanceProfile: 'LabInstanceProfile'
       Tags:
         - Key: 'Name'
-          Value: 'BastionHost'
+          Value: 'WebServer'
+
+  RdsSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable access to the RDS instance'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !GetAtt [WebServerSecurityGroup, GroupId]
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          # CidrIp: 'ADMIN_IP/32' # Replace with admin IP address
+      Tags:
+        - Key: 'Name'
+          Value: 'RdsSecurityGroup'
+
+  MySqlDatabase:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AllocatedStorage: '20'
+      DBInstanceClass: db.t2.micro
+      Engine: MySQL
+      EngineVersion: '8.0'
+      MasterUsername: 'admin'
+      MasterUserPassword: 'admin123'
+      DBInstanceIdentifier: 'mydb'
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      Tags:
+        - Key: 'Name'
+          Value: 'MySqlDatabase'
 
 Outputs:
   BastionHostPublicIP:
