@@ -273,6 +273,13 @@ Resources:
       Port: 80
       Protocol: HTTP
 
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - LabRole
+
   ApplicationLaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     DependsOn: RDSInstance
@@ -284,7 +291,8 @@ Resources:
         SecurityGroupIds:
           - !Ref ApplicationSecurityGroup
         KeyName: !Ref KeyName
-        IamInstanceProfile: 'LabInstanceProfile'
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
         UserData:
           Fn::Base64: |
             #!/bin/bash
