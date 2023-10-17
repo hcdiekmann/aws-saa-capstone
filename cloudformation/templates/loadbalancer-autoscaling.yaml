@@ -1,0 +1,336 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CF template for the as-found architecture of the Capstone project
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Default: 'CapstoneKey' # Replace with your key pair name
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  RDSUsername:
+    Description: Username for RDS instance
+    Type: String
+    Default: 'admin'
+  RDSPassword:
+    Description: Password for RDS instance
+    Type: String
+    Default: 'admin123'
+
+Resources:
+  MyVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      Tags:
+        - Key: 'Name'
+          Value: 'MyVPC'
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.0.0/24'
+      AvailabilityZone: 'us-east-1a'
+      MapPublicIpOnLaunch: true # Enable auto-assignment of public IP on launch
+      Tags:
+        - Key: 'Name'
+          Value: 'PublicSubnet1'
+
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: 'us-east-1b'
+      MapPublicIpOnLaunch: true # Enable auto-assignment of public IP on launch
+      Tags:
+        - Key: 'Name'
+          Value: 'PublicSubnet2'
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MyVPC
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicRouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  PublicRouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: 'us-east-1a'
+      Tags:
+        - Key: 'Name'
+          Value: 'PrivateSubnet1'
+
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.4.0/24'
+      AvailabilityZone: 'us-east-1b'
+      Tags:
+        - Key: 'Name'
+          Value: 'PrivateSubnet2'
+
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: 'Name'
+          Value: 'PrivateRouteTable'
+  PrivateRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+  PrivateSubnetRouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # NAT Getway for Private Subnet to access internet for updates, patches, etc.
+  EIPForNATGateway:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: AttachGateway
+  NATGateway:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt EIPForNATGateway.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  # DB Subnet Group for RDS instance to use private subnets in two AZs
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS instance'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  BastionHostSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable SSH access from specified IP address range'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0 # Replace with your IP address for SSH access
+      Tags:
+        - Key: 'Name'
+          Value: 'BastionHostSecurityGroup'
+
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable HTTP access'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: 'Name'
+          Value: 'ALBSecurityGroup'
+
+  ApplicationSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable SSH from Bastion Host and HTTP access'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          SourceSecurityGroupId: !Ref BastionHostSecurityGroup
+      Tags:
+        - Key: 'Name'
+          Value: 'ApplicationSecurityGroup'
+
+  RDSSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Open database for access from web server
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+      Tags:
+        - Key: 'Name'
+          Value: 'RDSSecurityGroup'
+
+  BastionHost:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0e1c5d8c23330dee3 # Ensure this is the correct AMI ID for your region
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref BastionHostSecurityGroup
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: 'Name'
+          Value: 'BastionHost'
+
+  RDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBName: 'country_schema'
+      DBInstanceIdentifier: 'countryschema' # This must be unique for the region
+      MasterUsername: !Ref RDSUsername
+      MasterUserPassword: !Ref RDSPassword
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t3.micro
+      Engine: mariadb
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
+
+  ApplicationLoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: 'ApplicationLoadBalancer'
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: 'Name'
+          Value: 'ApplicationLoadBalancer'
+
+  ApplicationTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: 'ApplicationTargetGroup'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref MyVPC
+      TargetType: instance
+      HealthCheckIntervalSeconds: 10
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: 'Name'
+          Value: 'ApplicationTargetGroup'
+
+  ApplicationListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ApplicationTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  ApplicationLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    DependsOn: RDSInstance
+    Properties:
+      LaunchTemplateName: 'ApplicationLaunchTemplate'
+      LaunchTemplateData:
+        ImageId: ami-0e1c5d8c23330dee3 # Ensure this is the correct AMI ID for your region
+        InstanceType: t2.micro
+        SecurityGroupIds:
+          - !Ref ApplicationSecurityGroup
+        KeyName: !Ref KeyName
+        IamInstanceProfile: 'LabInstanceProfile'
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+            yum install -y httpd mariadb-server
+            chkconfig httpd on
+            service httpd start
+            cd /home/ec2-user
+            wget https://aws-tc-largeobjects.s3.us-west-2.amazonaws.com/CUR-TF-200-ACACAD-2/21-course-project/s3/Countrydatadump.sql
+            chown ec2-user:ec2-user Countrydatadump.sql
+            cd /var/www/html
+            wget https://aws-tc-largeobjects.s3.us-west-2.amazonaws.com/CUR-TF-200-ACACAD-2/21-course-project/s3/Example.zip
+            unzip Example.zip -d /var/www/html/
+            chown -R ec2-user:ec2-user /var/www/html
+            cd /home/ec2-user
+            sudo systemctl enable mariadb.service
+            sudo systemctl start mariadb.service
+            database=$(aws ssm get-parameter --name "/example/database" --region "us-east-1" --query "Parameter.Value" --output text)
+            endpoint=$(aws rds describe-db-instances --region "us-east-1" --db-instance-identifier "countryschema" --query "DBInstances[0].Endpoint.Address" --output text)
+            aws ssm put-parameter --name "/example/endpoint" --value $endpoint --type String --region "us-east-1" --overwrite
+            password=$(aws ssm get-parameter --name "/example/password" --region "us-east-1" --query "Parameter.Value" --output text)
+            username=$(aws ssm get-parameter --name "/example/username" --region "us-east-1" --query "Parameter.Value" --output text)
+            mysql -u $username -p$password -h $endpoint $database < Countrydatadump.sql
+
+  ApplicationAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    DependsOn: AttachGateway
+    Properties:
+      AutoScalingGroupName: 'ApplicationAutoScalingGroup'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ApplicationLaunchTemplate
+        Version: !GetAtt ApplicationLaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref ApplicationTargetGroup
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+Outputs:
+  RDSInstanceEndpoint:
+    Description: 'Endpoint for RDS instance'
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  ALBDNSName:
+    Description: 'DNS Name of Application Load Balancer'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
