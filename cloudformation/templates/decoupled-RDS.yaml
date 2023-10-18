@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CF template for the as-found architecture of the Capstone project
+Description: A basic php application with a decoupled database tier
 
 Parameters:
   KeyName:

@@ -1,22 +1,25 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: CF template for the as-found architecture of the Capstone project
+Description: A php application with autoscaling and load balancing and a RDS database
 
 Parameters:
   KeyName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
     Type: 'AWS::EC2::KeyPair::KeyName'
-    Default: 'CapstoneKey' # Replace with your key pair name
+    Default: 'CapstoneKey'
     ConstraintDescription: must be the name of an existing EC2 KeyPair.
-  RDSUsername:
+  DBUsername:
     Description: Username for RDS instance
     Type: String
     Default: 'admin'
-  RDSPassword:
+  DBPassword:
     Description: Password for RDS instance
     Type: String
     Default: 'admin123'
 
 Resources:
+  ##########################
+  ### Network & Security ###
+  ##########################
   MyVPC:
     Type: 'AWS::EC2::VPC'
     Properties:
@@ -27,7 +30,6 @@ Resources:
 
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
-
   AttachGateway:
     Type: 'AWS::EC2::VPCGatewayAttachment'
     Properties:
@@ -40,7 +42,7 @@ Resources:
       VpcId: !Ref MyVPC
       CidrBlock: '10.0.0.0/24'
       AvailabilityZone: 'us-east-1a'
-      MapPublicIpOnLaunch: true # Enable auto-assignment of public IP on launch
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: 'Name'
           Value: 'PublicSubnet1'
@@ -51,7 +53,7 @@ Resources:
       VpcId: !Ref MyVPC
       CidrBlock: '10.0.1.0/24'
       AvailabilityZone: 'us-east-1b'
-      MapPublicIpOnLaunch: true # Enable auto-assignment of public IP on launch
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: 'Name'
           Value: 'PublicSubnet2'
@@ -78,6 +80,16 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
+
+  # NAT Gateway for Private Subnet to access internet for updates, patches, etc.
+  EIPForNATGateway:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: AttachGateway
+  NATGateway:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt EIPForNATGateway.AllocationId
+      SubnetId: !Ref PublicSubnet1
 
   PrivateSubnet1:
     Type: 'AWS::EC2::Subnet'
@@ -124,25 +136,6 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  # NAT Getway for Private Subnet to access internet for updates, patches, etc.
-  EIPForNATGateway:
-    Type: 'AWS::EC2::EIP'
-    DependsOn: AttachGateway
-  NATGateway:
-    Type: 'AWS::EC2::NatGateway'
-    Properties:
-      AllocationId: !GetAtt EIPForNATGateway.AllocationId
-      SubnetId: !Ref PublicSubnet1
-
-  # DB Subnet Group for RDS instance to use private subnets in two AZs
-  DBSubnetGroup:
-    Type: 'AWS::RDS::DBSubnetGroup'
-    Properties:
-      DBSubnetGroupDescription: 'Subnet group for RDS instance'
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-
   BastionHostSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -152,7 +145,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
-          CidrIp: 0.0.0.0/0 # Replace with your IP address for SSH access
+          CidrIp: 0.0.0.0/0 # Replace with specific IP address for SSH access
       Tags:
         - Key: 'Name'
           Value: 'BastionHostSecurityGroup'
@@ -189,7 +182,7 @@ Resources:
         - Key: 'Name'
           Value: 'ApplicationSecurityGroup'
 
-  RDSSecurityGroup:
+  DBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: Open database for access from web server
@@ -201,13 +194,16 @@ Resources:
           SourceSecurityGroupId: !Ref ApplicationSecurityGroup
       Tags:
         - Key: 'Name'
-          Value: 'RDSSecurityGroup'
+          Value: 'DBSecurityGroup'
 
+  ##########################
+  ### Compute Resources ####
+  ##########################
   BastionHost:
     Type: 'AWS::EC2::Instance'
     Properties:
       InstanceType: t2.micro
-      ImageId: ami-0e1c5d8c23330dee3 # Ensure this is the correct AMI ID for your region
+      ImageId: ami-0e1c5d8c23330dee3 # specific AMI ID for us-east-1
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref BastionHostSecurityGroup
@@ -216,19 +212,27 @@ Resources:
         - Key: 'Name'
           Value: 'BastionHost'
 
-  RDSInstance:
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS instance'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  DBInstance:
     Type: 'AWS::RDS::DBInstance'
     Properties:
       DBName: 'country_schema'
-      DBInstanceIdentifier: 'countryschema' # This must be unique for the region
-      MasterUsername: !Ref RDSUsername
-      MasterUserPassword: !Ref RDSPassword
-      AllocatedStorage: '5'
+      DBInstanceIdentifier: 'countryschema' # to get the DNS endpoint from EC2 instance
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: '5' # GB
       DBInstanceClass: db.t3.micro
       Engine: mariadb
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
-        - !GetAtt RDSSecurityGroup.GroupId
+        - !GetAtt DBSecurityGroup.GroupId
 
   ApplicationLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
@@ -282,12 +286,12 @@ Resources:
 
   ApplicationLaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
-    DependsOn: RDSInstance
+    DependsOn: DBInstance
     Properties:
       LaunchTemplateName: 'ApplicationLaunchTemplate'
       LaunchTemplateData:
-        ImageId: ami-0e1c5d8c23330dee3 # Ensure this is the correct AMI ID for your region
-        InstanceType: t2.micro
+        ImageId: ami-0e1c5d8c23330dee3 # Ensure the correct AMI ID for the region
+        InstanceType: t2.small
         SecurityGroupIds:
           - !Ref ApplicationSecurityGroup
         KeyName: !Ref KeyName
@@ -336,9 +340,9 @@ Resources:
         - !Ref PublicSubnet2
 
 Outputs:
-  RDSInstanceEndpoint:
+  DBInstanceEndpoint:
     Description: 'Endpoint for RDS instance'
-    Value: !GetAtt RDSInstance.Endpoint.Address
-  ALBDNSName:
-    Description: 'DNS Name of Application Load Balancer'
+    Value: !GetAtt DBInstance.Endpoint.Address
+  AppURL:
+    Description: 'Url of Application Load Balancer'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
