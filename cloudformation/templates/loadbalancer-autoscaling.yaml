@@ -40,7 +40,7 @@ Resources:
     Type: 'AWS::EC2::Subnet'
     Properties:
       VpcId: !Ref MyVPC
-      CidrBlock: '10.0.0.0/24'
+      CidrBlock: '10.0.1.0/24'
       AvailabilityZone: 'us-east-1a'
       MapPublicIpOnLaunch: true
       Tags:
@@ -51,7 +51,7 @@ Resources:
     Type: 'AWS::EC2::Subnet'
     Properties:
       VpcId: !Ref MyVPC
-      CidrBlock: '10.0.1.0/24'
+      CidrBlock: '10.0.3.0/24'
       AvailabilityZone: 'us-east-1b'
       MapPublicIpOnLaunch: true
       Tags:
@@ -160,6 +160,10 @@ Resources:
           FromPort: '80'
           ToPort: '80'
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
       Tags:
         - Key: 'Name'
           Value: 'ALBSecurityGroup'
@@ -336,8 +340,8 @@ Resources:
       TargetGroupARNs:
         - !Ref ApplicationTargetGroup
       VPCZoneIdentifier:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
 
 Outputs:
   DBInstanceEndpoint:
